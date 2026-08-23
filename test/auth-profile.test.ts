@@ -4,6 +4,7 @@ import path from "node:path"
 import { afterEach, describe, expect, it } from "vitest"
 import { Effect } from "effect"
 import * as AuthProfile from "../src/auth-profile.ts"
+import { SecretProfile } from "../src/index.ts"
 
 const temporaryDirectories: string[] = []
 
@@ -22,6 +23,8 @@ describe("AuthProfile", () => {
 
     expect(result).toMatchObject({ name: "uber", slotCount: 1, slots: [{ ref: "BC_SECRET_1", expired: false }] })
     expect(JSON.stringify(result)).not.toContain("token-value")
+    const publicStatus = await Effect.runPromise(SecretProfile.status("uber", { baseDir }))
+    expect(publicStatus).toEqual(result)
     const stat = await fs.stat(path.join(baseDir, "uber.json"))
     expect(stat.mode & 0o777).toBe(0o600)
   })
@@ -34,13 +37,30 @@ describe("AuthProfile", () => {
       slots: [{ ref: "BC_SECRET_1", value: "token-value", sources: ["request.header.authorization"] }],
     }))
 
-    const result = await Effect.runPromise(AuthProfile.run({
+    const result = await Effect.runPromise(SecretProfile.run({
       name: "uber",
       baseDir,
       command: process.execPath,
       args: ["-e", "process.stdout.write(process.env.BC_SECRET_1 || '')"],
     }))
     expect(result).toMatchObject({ exitCode: 0, stdout: "${BC_SECRET_1}", stderr: "" })
+  })
+
+  it("exposes a runtime error class and rejects unsafe worker bounds", async () => {
+    const baseDir = await temporaryDirectory()
+
+    await expect(Effect.runPromise(SecretProfile.run({
+      name: "uber",
+      baseDir,
+      command: process.execPath,
+      timeoutMs: 0,
+    }))).rejects.toBeInstanceOf(SecretProfile.Error)
+    await expect(Effect.runPromise(SecretProfile.run({
+      name: "uber",
+      baseDir,
+      command: process.execPath,
+      maxOutputBytes: -1,
+    }))).rejects.toMatchObject({ _tag: "AuthProfile.Error", reason: "run-failed" })
   })
 
   it("does not leak a credential cut by the output budget", async () => {

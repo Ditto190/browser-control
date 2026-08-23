@@ -51,6 +51,19 @@ export type AuthRunResult = {
   readonly durationMs: number
 }
 
+export interface AuthProfileOptions {
+  readonly baseDir?: string
+}
+
+export interface AuthRunOptions extends AuthProfileOptions {
+  readonly name: string
+  readonly command: string
+  readonly args?: readonly string[]
+  readonly cwd?: string
+  readonly timeoutMs?: number
+  readonly maxOutputBytes?: number
+}
+
 export class AuthProfileError extends Schema.TaggedError<AuthProfileError>()(
   "AuthProfile.Error",
   {
@@ -65,6 +78,8 @@ export const defaultBaseDir = (): string => path.join(os.homedir(), ".browser-co
 const writeLock = Semaphore.makeUnsafe(1)
 const profileLockTimeoutMs = 30_000
 const staleProfileLockMs = 60_000
+const maximumRunOutputBytes = 10_000_000
+const maximumTimeoutMs = 2_147_483_647
 
 export const read = Effect.fn("AuthProfile.read")(function* (name: string, options: { readonly baseDir?: string } = {}) {
   const filePath = yield* profilePath(options.baseDir ?? defaultBaseDir(), name)
@@ -195,31 +210,30 @@ export const write = Effect.fn("AuthProfile.write")(function* (options: {
   return yield* writeLock.withPermit(writeProfile(options))
 })
 
-export const status = Effect.fn("AuthProfile.status")(function* (name: string, options: { readonly baseDir?: string } = {}) {
+export const status = Effect.fn("AuthProfile.status")(function* (name: string, options: AuthProfileOptions = {}) {
   return summary(yield* read(name, options))
 })
 
-export const run = Effect.fn("AuthProfile.run")(function* (options: {
-  readonly name: string
-  readonly command: string
-  readonly args?: readonly string[]
-  readonly cwd?: string
-  readonly timeoutMs?: number
-  readonly maxOutputBytes?: number
-  readonly baseDir?: string
-}) {
+export const run = Effect.fn("AuthProfile.run")(function* (options: AuthRunOptions) {
   if (!options.command.trim()) {
     return yield* Effect.fail(new AuthProfileError({ message: "Auth command must not be empty", operation: "run", reason: "run-failed" }))
   }
+  const timeoutMs = options.timeoutMs ?? 120_000
+  if (!Number.isSafeInteger(timeoutMs) || timeoutMs <= 0 || timeoutMs > maximumTimeoutMs) {
+    return yield* Effect.fail(new AuthProfileError({ message: `Auth command timeout must be an integer between 1 and ${maximumTimeoutMs} milliseconds`, operation: "run", reason: "run-failed" }))
+  }
+  const maxOutputBytes = options.maxOutputBytes ?? 1_000_000
+  if (!Number.isSafeInteger(maxOutputBytes) || maxOutputBytes < 0 || maxOutputBytes > maximumRunOutputBytes) {
+    return yield* Effect.fail(new AuthProfileError({ message: `Auth command output limit must be an integer between 0 and ${maximumRunOutputBytes} bytes`, operation: "run", reason: "run-failed" }))
+  }
   const profile = yield* read(options.name, { ...(options.baseDir ? { baseDir: options.baseDir } : {}) })
   const startedAt = Date.now()
-  const maxOutputBytes = options.maxOutputBytes ?? 1_000_000
   const maxSecretBytes = profile.slots.reduce((max, slot) => Math.max(max, Buffer.byteLength(slot.value)), 0)
   const result = yield* runChild({
       command: options.command,
       args: options.args ?? [],
       ...(options.cwd ? { cwd: options.cwd } : {}),
-      timeoutMs: options.timeoutMs ?? 120_000,
+      timeoutMs,
       maxOutputBytes: maxOutputBytes + maxSecretBytes,
       env: Object.fromEntries(profile.slots.map((slot) => [slot.ref, slot.value])),
     }).pipe(
@@ -237,7 +251,7 @@ export const run = Effect.fn("AuthProfile.run")(function* (options: {
   } satisfies AuthRunResult
 })
 
-export const remove = Effect.fn("AuthProfile.remove")(function* (name: string, options: { readonly baseDir?: string } = {}) {
+export const remove = Effect.fn("AuthProfile.remove")(function* (name: string, options: AuthProfileOptions = {}) {
   const filePath = yield* profilePath(options.baseDir ?? defaultBaseDir(), name)
   return yield* Effect.tryPromise({
     try: async () => {
