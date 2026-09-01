@@ -1009,8 +1009,8 @@ return { result: await page.locator('#class-result').textContent() }
     name: "handoff-navigation",
     run: Effect.fnUntraced(function* (page) {
       const extension = yield* fetchStatus()
-      if (extension.protocolVersion !== 1 || extension.protocolCompatible !== true) {
-        return yield* Effect.fail(new Error(`handoff-navigation requires extension protocol 1; connected extension reports ${extension.protocolVersion ?? "unknown"}`))
+      if ((extension.protocolVersion ?? 0) < 1 || extension.protocolCompatible !== true) {
+        return yield* Effect.fail(new Error(`handoff-navigation requires a compatible extension protocol; connected extension reports ${extension.protocolVersion ?? "unknown"}`))
       }
       const marker = `bc-handoff-${Date.now()}`
       const smokeSession = `${marker}-session`
@@ -1054,8 +1054,8 @@ return { result: await page.locator('#class-result').textContent() }
     name: "handoff-cross-tab",
     run: Effect.fnUntraced(function* (page) {
       const extension = yield* fetchStatus()
-      if (extension.protocolVersion !== 1 || extension.protocolCompatible !== true) {
-        return yield* Effect.fail(new Error(`handoff-cross-tab requires extension protocol 1; connected extension reports ${extension.protocolVersion ?? "unknown"}`))
+      if ((extension.protocolVersion ?? 0) < 1 || extension.protocolCompatible !== true) {
+        return yield* Effect.fail(new Error(`handoff-cross-tab requires a compatible extension protocol; connected extension reports ${extension.protocolVersion ?? "unknown"}`))
       }
       const marker = `bc-handoff-a-${Date.now()}`
       const peerMarker = `bc-handoff-b-${Date.now()}`
