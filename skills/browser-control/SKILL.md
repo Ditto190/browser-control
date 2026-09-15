@@ -48,6 +48,12 @@ Completion: one execute returns a page result and a readable session id, or
 
 ### 2. Choose The Page Deliberately
 
+The bundled shim 0.0.25 verifies debugger ownership during reconnection. Reload
+the unpacked extension after installing this shim update. DevTools-attached tabs
+are excluded from Browser Control's inventory. `page.title()` reads time out
+after five seconds if the page execution context remains unavailable; the read
+timeout does not close or replace the tab.
+
 A bare CLI execute creates a fresh session-owned page and prints the exact
 `--session <id>` continuation command. Every later CLI call must pass that id or
 set `BROWSER_CONTROL_SESSION`; bare execute never guesses from human-shell
@@ -70,6 +76,13 @@ it for sticky reuse:
 browser-control execute --target-url github.com 'return page.url()'
 browser-control session adopt --target-url github.com --session github
 ```
+
+`execute --target-url` selects a page for that call only. Continuing with just
+`--session` uses the session's default page, which may still be `about:blank`.
+For a multi-step task in an existing user tab, adopt it first. Always include
+`page.url()` when diagnosing an empty snapshot. Snapshot labels are compact
+descriptions; use `ref()` for actions rather than assuming their text is an
+exact Playwright accessible name.
 
 `targetUrl` and `targetIndex` select existing attached pages; they never
 navigate. A URL selector must match exactly one page, and URL and index selectors

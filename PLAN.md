@@ -5,6 +5,24 @@ description: Current product direction, architecture decisions, and prioritized 
 
 # Browser Control Plan
 
+## Standalone installation validation
+
+Debugger inventory must prove this extension owns each attachment with a
+read-only command; Chrome's global `attached` flag also includes DevTools.
+`page.title()` has a five-second read deadline because Playwright exposes no
+timeout for that method. This bounds the observed missing-context title hang;
+it is not a general cancellation mechanism for arbitrary user scripts.
+
+Runtime candidates constrain npm's Effect and shared Node adapter resolution to
+the checkout's pinned releases. Otherwise npm can install a newer prerelease peer
+beside the CLI's pinned Effect, causing missing services or missing module exports.
+Candidate CLI, SDK and MCP checks run before selecting the installation.
+
+September 14 field check: customized a restaurant item, verified its cart snapshot,
+removed it, and restarted/reconnected to the same browser tab successfully. Compact
+labels now include visible image alt text. Full accessible-name equivalence is not
+guaranteed; agents should use snapshot refs and refresh after virtualized DOM changes.
+
 Browser Control is a local driver that lets trusted agents automate the user's
 already-running Chromium-family browser. It provides browser control, session
 isolation, and diagnostics; it does not call models or decide what to do.
